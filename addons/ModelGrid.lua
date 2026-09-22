@@ -17,6 +17,7 @@ local ModelGrid = {
         SearchHeight    = 26,
         LazyBuffer      = 150,
         PreviewDistance = 1.6,
+        ListCellHeight  = 26,
     },
 
     PreviewCache = setmetatable({}, { __mode = "k" }),
@@ -26,6 +27,9 @@ local ModelGrid = {
         Values        = {},
         Height        = nil,
         CellSize      = nil,
+        CellHeight    = nil,
+        Columns       = 1,
+        NoPreview     = false,
         ModelProvider = nil,
         FormatDisplay = nil,
         Searchable    = true,
@@ -59,17 +63,17 @@ function ModelGrid:RegisterSaveParser()
     if not SM or not SM.ElementParser then return end
 
     SM.ElementParser["ModelGrid"] = {
-        Save = function(Index, Element)
-            return { type = "ModelGrid", idx = Index, value = Element.Value }
+        Save = function(_Index, Element)
+            return { value = Element.Value, hasValue = Element.Value ~= nil }
         end,
-        Load = function(Index, Data)
-            local Element = ModelGrid.Library and ModelGrid.Library.Options[Index]
+        Load = function(Element, Data)
             if not Element then return end
-            if Element.Value == Data.value then
+            local v = Data.hasValue and Data.value or nil
+            if Element.Value == v then
                 if Element.RunChanged then Element:RunChanged() end
                 return
             end
-            Element:SetValue(Data.value)
+            Element:SetValue(v)
         end,
     }
 end
@@ -192,7 +196,9 @@ function ModelGrid:Create(Groupbox, Idx, Info)
     Info = Library:Validate(Info, ModelGrid.Templates)
 
     local Container  = Groupbox.Container
-    local CellSize   = Info.CellSize or ModelGrid.Config.CellSize
+    local NoPreview  = Info.NoPreview == true
+    local Columns    = math.max(1, math.floor(tonumber(Info.Columns) or 1))
+    local CellHeight = Info.CellHeight or (NoPreview and ModelGrid.Config.ListCellHeight or 170)
     local GridHeight = Info.Height  or ModelGrid.Config.DefaultHeight
     local Searchable = Info.Searchable ~= false
     local LabelH     = Info.Text and 18 or 0
@@ -302,12 +308,30 @@ function ModelGrid:Create(Groupbox, Idx, Info)
     Element.Scroll = Scroll
 
     local Grid = Instance.new("UIGridLayout")
-    Grid.CellSize = CellSize
+    Grid.CellSize = Info.CellSize or ModelGrid.Config.CellSize
     Grid.CellPadding = ModelGrid.Config.CellPadding
     Grid.SortOrder = Enum.SortOrder.LayoutOrder
     Grid.HorizontalAlignment = Enum.HorizontalAlignment.Center
     Grid.Parent = Scroll
     Element.Grid = Grid
+
+    local function recalcGridSize()
+        if Element.Destroyed then return end
+        local scrollW = Scroll.AbsoluteSize.X / Library.DPIScale
+        if scrollW <= 0 then return end
+
+        local pad = ModelGrid.Config.CellPadding.X.Offset
+        local totalPad = pad * (Columns + 1)
+        local cellW = math.floor((scrollW - totalPad) / Columns)
+        if cellW < 60 then cellW = 60 end
+
+        local cellH = CellHeight
+        if not NoPreview then
+            cellH = Info.CellHeight or 130 + 40
+        end
+
+        Grid.CellSize = UDim2.fromOffset(cellW, cellH)
+    end
 
     local function makeCell(itemName, display)
         local Cell = {
@@ -335,31 +359,49 @@ function ModelGrid:Create(Groupbox, Idx, Info)
         cellCorner.CornerRadius = UDim.new(0, 4)
         cellCorner.Parent = Frame
 
-        local vp = Instance.new("ViewportFrame")
-        vp.Name = "VP"
-        vp.BackgroundColor3 = Library.Scheme.BackgroundColor
-        vp.BackgroundTransparency = 0.3
-        vp.BorderSizePixel = 0
-        vp.Size = UDim2.new(1, -8, 0, ModelGrid.Config.ViewportHeight)
-        vp.Position = UDim2.new(0, 4, 0, 4)
-        vp.Ambient = Color3.fromRGB(180, 180, 180)
-        vp.LightColor = Color3.fromRGB(255, 255, 255)
-        vp.LightDirection = Vector3.new(-1, -1, -1)
-        vp.Parent = Frame
-        Library:AddToRegistry(vp, { BackgroundColor3 = "BackgroundColor" })
+        local vp
+        local nameLbl
 
-        local nameLbl = Instance.new("TextLabel")
-        nameLbl.Name = "NameLbl"
-        nameLbl.BackgroundTransparency = 1
-        nameLbl.Size = UDim2.new(1, -8, 0, 30)
-        nameLbl.Position = UDim2.new(0, 4, 1, -34)
-        nameLbl.Text = display
-        nameLbl.FontFace = Library.Scheme.Font
-        nameLbl.TextSize = 10
-        nameLbl.TextWrapped = true
-        nameLbl.TextColor3 = Library.Scheme.FontColor
-        nameLbl.Parent = Frame
-        Library:AddToRegistry(nameLbl, { TextColor3 = "FontColor", FontFace = "Font" })
+        if NoPreview then
+            nameLbl = Instance.new("TextLabel")
+            nameLbl.Name = "NameLbl"
+            nameLbl.BackgroundTransparency = 1
+            nameLbl.Size = UDim2.new(1, -16, 1, 0)
+            nameLbl.Position = UDim2.new(0, 8, 0, 0)
+            nameLbl.Text = display
+            nameLbl.FontFace = Library.Scheme.Font
+            nameLbl.TextSize = 11
+            nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+            nameLbl.TextColor3 = Library.Scheme.FontColor
+            nameLbl.Parent = Frame
+            Library:AddToRegistry(nameLbl, { TextColor3 = "FontColor", FontFace = "Font" })
+        else
+            vp = Instance.new("ViewportFrame")
+            vp.Name = "VP"
+            vp.BackgroundColor3 = Library.Scheme.BackgroundColor
+            vp.BackgroundTransparency = 0.3
+            vp.BorderSizePixel = 0
+            vp.Size = UDim2.new(1, -8, 1, -34)
+            vp.Position = UDim2.new(0, 4, 0, 4)
+            vp.Ambient = Color3.fromRGB(180, 180, 180)
+            vp.LightColor = Color3.fromRGB(255, 255, 255)
+            vp.LightDirection = Vector3.new(-1, -1, -1)
+            vp.Parent = Frame
+            Library:AddToRegistry(vp, { BackgroundColor3 = "BackgroundColor" })
+
+            nameLbl = Instance.new("TextLabel")
+            nameLbl.Name = "NameLbl"
+            nameLbl.BackgroundTransparency = 1
+            nameLbl.Size = UDim2.new(1, -8, 0, 30)
+            nameLbl.Position = UDim2.new(0, 4, 1, -34)
+            nameLbl.Text = display
+            nameLbl.FontFace = Library.Scheme.Font
+            nameLbl.TextSize = 10
+            nameLbl.TextWrapped = true
+            nameLbl.TextColor3 = Library.Scheme.FontColor
+            nameLbl.Parent = Frame
+            Library:AddToRegistry(nameLbl, { TextColor3 = "FontColor", FontFace = "Font" })
+        end
 
         local btn = Instance.new("TextButton")
         btn.BackgroundTransparency = 1
@@ -386,6 +428,7 @@ function ModelGrid:Create(Groupbox, Idx, Info)
         if cell.Loaded or cell.Destroyed then return end
         if cell.ItemName == nil then return end
         if not Element.ModelProvider then return end
+        if not cell.Viewport then cell.Loaded = true; return end
 
         cell.Loaded = true
         local ok, model = pcall(Element.ModelProvider, cell.ItemName)
@@ -395,7 +438,7 @@ function ModelGrid:Create(Groupbox, Idx, Info)
     end
 
     function Element:UpdateVisibleViewports()
-        if self.Destroyed then return end
+        if self.Destroyed or NoPreview then return end
         local scrollAbs = Scroll.AbsolutePosition
         local scrollSize = Scroll.AbsoluteSize
         local buffer = ModelGrid.Config.LazyBuffer
@@ -591,6 +634,9 @@ function ModelGrid:Create(Groupbox, Idx, Info)
         Element.Value = nil
         Element:RefreshHighlights()
     end
+
+    task.defer(recalcGridSize)
+    table.insert(Element.Connections, Scroll:GetPropertyChangedSignal("AbsoluteSize"):Connect(recalcGridSize))
 
     return Element
 end
