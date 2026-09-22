@@ -4,22 +4,23 @@ local FluentSkin = {
     Library = nil,
     C = {
         Bg          = Color3.fromRGB(20, 20, 20),
-        BgAlt       = Color3.fromRGB(26, 26, 26),
+        BgAlt       = Color3.fromRGB(28, 28, 28),
         Card        = Color3.fromRGB(120, 120, 120),
         CardT       = 0.87,
         CardHover   = 0.82,
+        MenuBg      = Color3.fromRGB(28, 28, 28),
+        MenuRow     = Color3.fromRGB(255, 255, 255),
         Border      = Color3.fromRGB(90, 90, 90),
         BorderT     = 0.6,
-        InBorder    = Color3.fromRGB(90, 90, 90),
         Text        = Color3.fromRGB(240, 240, 240),
         SubText     = Color3.fromRGB(170, 170, 170),
         Accent      = Color3.fromRGB(96, 205, 255),
+        AccentT     = 0.15,
         Font        = Font.new("rbxasset://fonts/families/GothamSSm.json"),
         Corner      = 8,
         ElementH    = 42,
         PadX        = 12,
         TabH        = 36,
-        TopH        = 42,
     },
 }
 
@@ -50,27 +51,10 @@ function FluentSkin:SetLibrary(Library)
     Library:UpdateColorsUsingRegistry()
 
     self:HookWindow(Library.Window)
-    task.defer(function() self:SkinWindow() end)
+    self:HookNotify()
+
+    task.delay(1, function() FluentSkin:StyleAllOptions() end)
     return self
-end
-
-function FluentSkin:SkinWindow()
-    local L = self.Library
-    local W = L.Window
-    if not W or not W.MainFrame then return end
-    local C = self.C
-    local Main = W.MainFrame
-
-    Main.BackgroundColor3 = C.Bg
-    local mc = ensure(Main, "UICorner")
-    mc.CornerRadius = UDim.new(0, C.Corner + 2)
-
-    -- TopBar: search + title
-    for _, d in ipairs(Main:GetDescendants()) do
-        if d:IsA("TextLabel") then
-            d.FontFace = C.Font
-        end
-    end
 end
 
 function FluentSkin:HookWindow(Window)
@@ -94,10 +78,40 @@ function FluentSkin:HookWindow(Window)
     end
 end
 
+function FluentSkin:HookNotify()
+    local L = self.Library
+    if not L or L.__FluentNotifyHooked then return end
+    L.__FluentNotifyHooked = true
+
+    local orig = L.Notify
+    L.Notify = function(self2, ...)
+        local Data = orig(self2, ...)
+        if Data and Data.Holder then
+            FluentSkin:SkinNotification(Data.Holder)
+        end
+        return Data
+    end
+end
+
 function FluentSkin:HookTab(Tab)
     if not Tab or Tab.__FluentHooked then return end
     Tab.__FluentHooked = true
     self:SkinTabButton(Tab)
+
+    if Tab.Show then
+        local origShow = Tab.Show
+        Tab.Show = function(self2, ...)
+            if origShow then origShow(self2, ...) end
+            FluentSkin:UpdateTabIndicators()
+        end
+    end
+    if Tab.Hide then
+        local origHide = Tab.Hide
+        Tab.Hide = function(self2, ...)
+            if origHide then origHide(self2, ...) end
+            FluentSkin:UpdateTabIndicators()
+        end
+    end
 
     local origAddGroupbox = Tab.AddGroupbox
     if typeof(origAddGroupbox) ~= "function" then return end
@@ -109,16 +123,26 @@ function FluentSkin:HookTab(Tab)
     end
 end
 
--- ============================================================
--- Tab button (left sidebar)
--- ============================================================
+function FluentSkin:UpdateTabIndicators()
+    local L = self.Library
+    if not L or not L.Tabs then return end
+    local active = L.ActiveTab
+    for _, T in pairs(L.Tabs) do
+        if typeof(T) == "table" and not T.IsKeyTab and T.Button then
+            local ind = T.Button:FindFirstChild("FluentIndicator")
+            if ind then
+                ind.Visible = (T == active)
+            end
+        end
+    end
+end
+
 function FluentSkin:SkinTabButton(Tab)
     local Btn = Tab.Button
     if not Btn then return end
     local C = self.C
 
     Btn.Size = UDim2.new(1, -12, 0, C.TabH)
-    Btn.Position = UDim2.new(0, 6, 0, Btn.Position.Y.Offset)
 
     local corner = ensure(Btn, "UICorner")
     corner.CornerRadius = UDim.new(0, C.Corner - 2)
@@ -134,7 +158,6 @@ function FluentSkin:SkinTabButton(Tab)
         end
     end
 
-    -- side indicator
     if not Btn:FindFirstChild("FluentIndicator") then
         local bar = Instance.new("Frame")
         bar.Name = "FluentIndicator"
@@ -152,9 +175,6 @@ function FluentSkin:SkinTabButton(Tab)
     end
 end
 
--- ============================================================
--- Groupbox
--- ============================================================
 function FluentSkin:SkinGroupbox(Groupbox)
     if not Groupbox or Groupbox.__FluentSkinned then return end
     Groupbox.__FluentSkinned = true
@@ -221,9 +241,6 @@ function FluentSkin:SkinGroupbox(Groupbox)
     end
 end
 
--- ============================================================
--- Card helper
--- ============================================================
 function FluentSkin:MakeCard(Holder, height)
     local C = self.C
     if not Holder or not Holder.Parent then return end
@@ -248,9 +265,6 @@ function FluentSkin:MakeCard(Holder, height)
     end)
 end
 
--- ============================================================
--- Toggle
--- ============================================================
 function FluentSkin:SkinToggle(Toggle)
     if not Toggle or Toggle.__FluentVisual then return end
     Toggle.__FluentVisual = true
@@ -284,9 +298,6 @@ function FluentSkin:SkinToggle(Toggle)
     end
 end
 
--- ============================================================
--- Slider
--- ============================================================
 function FluentSkin:SkinSlider(Slider)
     if not Slider or Slider.__FluentVisual then return end
     Slider.__FluentVisual = true
@@ -304,9 +315,6 @@ function FluentSkin:SkinSlider(Slider)
     end
 end
 
--- ============================================================
--- Dropdown
--- ============================================================
 function FluentSkin:SkinDropdown(Dropdown)
     if not Dropdown or Dropdown.__FluentVisual then return end
     Dropdown.__FluentVisual = true
@@ -324,11 +332,12 @@ function FluentSkin:SkinDropdown(Dropdown)
             d.TextColor3 = C.Text
         end
     end
+
+    if Dropdown.Menu then
+        task.defer(function() FluentSkin:StyleMenu(Dropdown.Menu) end)
+    end
 end
 
--- ============================================================
--- Input
--- ============================================================
 function FluentSkin:SkinInput(Input)
     if not Input or Input.__FluentVisual then return end
     Input.__FluentVisual = true
@@ -346,9 +355,6 @@ function FluentSkin:SkinInput(Input)
     end
 end
 
--- ============================================================
--- Button
--- ============================================================
 function FluentSkin:SkinButton(Button)
     if not Button or Button.__FluentVisual then return end
     Button.__FluentVisual = true
@@ -379,9 +385,6 @@ function FluentSkin:SkinButton(Button)
     end)
 end
 
--- ============================================================
--- Label / Divider
--- ============================================================
 function FluentSkin:SkinLabel(Label)
     if not Label or Label.__FluentVisual then return end
     Label.__FluentVisual = true
@@ -395,6 +398,58 @@ end
 function FluentSkin:SkinDivider(Divider)
     if not Divider or Divider.__FluentVisual then return end
     Divider.__FluentVisual = true
+end
+
+function FluentSkin:StyleMenu(MenuTable)
+    local C = self.C
+    if not MenuTable or not MenuTable.Menu then return end
+    local Frame = MenuTable.Menu
+
+    local corner = ensure(Frame, "UICorner")
+    corner.CornerRadius = UDim.new(0, C.Corner)
+
+    local stroke = Frame:FindFirstChildOfClass("UIStroke")
+    if not stroke then
+        stroke = Instance.new("UIStroke")
+        stroke.Parent = Frame
+    end
+    stroke.Color = C.Border
+    stroke.Transparency = 0.4
+
+    Frame.BackgroundColor3 = C.MenuBg
+end
+
+function FluentSkin:StyleAllOptions()
+    local L = self.Library
+    if not L or not L.Options then return end
+    for _, opt in pairs(L.Options) do
+        local t = opt.Type
+        if t == "Dropdown" and opt.Menu then
+            self:StyleMenu(opt.Menu)
+        elseif t == "KeyPicker" and opt.Menu then
+            self:StyleMenu(opt.Menu)
+        elseif t == "ColorPicker" then
+            if opt.ColorMenu then self:StyleMenu(opt.ColorMenu) end
+            if opt.ContextMenu then self:StyleMenu(opt.ContextMenu) end
+        end
+    end
+end
+
+function FluentSkin:SkinNotification(Holder)
+    local C = self.C
+    if not Holder then return end
+
+    Holder.BackgroundColor3 = C.BgAlt
+    Holder.BackgroundTransparency = 0.05
+
+    local corner = ensure(Holder, "UICorner")
+    corner.CornerRadius = UDim.new(0, C.Corner)
+
+    for _, d in ipairs(Holder:GetDescendants()) do
+        if d:IsA("TextLabel") then
+            d.FontFace = C.Font
+        end
+    end
 end
 
 getgenv().ObsidianFluentSkin = FluentSkin
