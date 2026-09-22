@@ -7,6 +7,7 @@ local FluentSkin = {
         Bg      = Color3.fromRGB(20, 20, 20),
         Card    = Color3.fromRGB(120, 120, 120),
         CardT   = 0.87,
+        CardG   = 0.94,
         Border  = Color3.fromRGB(35, 35, 35),
         InBorder= Color3.fromRGB(90, 90, 90),
         Text    = Color3.fromRGB(240, 240, 240),
@@ -73,7 +74,7 @@ function FluentSkin:HookTab(Tab)
 
     Tab.AddGroupbox = function(self, ...)
         local Groupbox = origAddGroupbox(self, ...)
-        FluentSkin:SkinGroupbox(Groupbox)
+        task.defer(function() FluentSkin:SkinGroupbox(Groupbox) end)
         return Groupbox
     end
 end
@@ -82,6 +83,8 @@ function FluentSkin:SkinGroupbox(Groupbox)
     if not Groupbox or Groupbox.__FluentSkinned then return end
     Groupbox.__FluentSkinned = true
 
+    self:SkinGroupboxVisual(Groupbox)
+
     local origAddToggle    = Groupbox.AddToggle
     local origAddSlider    = Groupbox.AddSlider
     local origAddDropdown  = Groupbox.AddDropdown
@@ -89,38 +92,74 @@ function FluentSkin:SkinGroupbox(Groupbox)
     local origAddButton    = Groupbox.AddButton
 
     if origAddToggle then
-        Groupbox.AddToggle = function(self, Idx, Info)
-            local Toggle = origAddToggle(self, Idx, Info)
-            task.defer(function() FluentSkin:SkinToggle(Toggle) end)
-            return Toggle
+        Groupbox.AddToggle = function(self2, Idx, Info)
+            local T = origAddToggle(self2, Idx, Info)
+            task.defer(function() FluentSkin:SkinToggle(T) end)
+            return T
         end
     end
     if origAddSlider then
-        Groupbox.AddSlider = function(self, Idx, Info)
-            local Slider = origAddSlider(self, Idx, Info)
-            task.defer(function() FluentSkin:SkinSlider(Slider) end)
-            return Slider
+        Groupbox.AddSlider = function(self2, Idx, Info)
+            local S = origAddSlider(self2, Idx, Info)
+            task.defer(function() FluentSkin:SkinSlider(S) end)
+            return S
         end
     end
     if origAddDropdown then
-        Groupbox.AddDropdown = function(self, Idx, Info)
-            local Dropdown = origAddDropdown(self, Idx, Info)
-            task.defer(function() FluentSkin:SkinDropdown(Dropdown) end)
-            return Dropdown
+        Groupbox.AddDropdown = function(self2, Idx, Info)
+            local D = origAddDropdown(self2, Idx, Info)
+            task.defer(function() FluentSkin:SkinDropdown(D) end)
+            return D
         end
     end
     if origAddInput then
-        Groupbox.AddInput = function(self, Idx, Info)
-            local Input = origAddInput(self, Idx, Info)
-            task.defer(function() FluentSkin:SkinInput(Input) end)
-            return Input
+        Groupbox.AddInput = function(self2, Idx, Info)
+            local I = origAddInput(self2, Idx, Info)
+            task.defer(function() FluentSkin:SkinInput(I) end)
+            return I
         end
     end
     if origAddButton then
-        Groupbox.AddButton = function(self, Idx, Info)
-            local Button = origAddButton(self, Idx, Info)
-            task.defer(function() FluentSkin:SkinButton(Button) end)
-            return Button
+        Groupbox.AddButton = function(self2, Idx, Info)
+            local B = origAddButton(self2, Idx, Info)
+            task.defer(function() FluentSkin:SkinButton(B) end)
+            return B
+        end
+    end
+end
+
+-- Groupbox card: soft transparent card, no visible top border, bigger title
+function FluentSkin:SkinGroupboxVisual(Groupbox)
+    local C = self.C
+    local holder = Groupbox.Holder
+    if not holder then return end
+
+    holder.BackgroundColor3 = C.Card
+    holder.BackgroundTransparency = C.CardG
+
+    local stroke = holder:FindFirstChildOfClass("UIStroke")
+    if stroke then
+        stroke.Color = C.Border
+        stroke.Transparency = 0.75
+        stroke.Thickness = 1
+    end
+
+    -- find GroupboxTop by AutomaticSize.Y
+    local top
+    for _, ch in ipairs(holder:GetChildren()) do
+        if ch:IsA("Frame") and ch.AutomaticSize == Enum.AutomaticSize.Y then
+            top = ch
+            break
+        end
+    end
+
+    if top then
+        for _, ch in ipairs(top:GetDescendants()) do
+            if ch:IsA("TextLabel") then
+                ch.FontFace = C.Font
+                ch.TextColor3 = C.Text
+                ch.TextSize = 15
+            end
         end
     end
 end
@@ -159,7 +198,7 @@ function FluentSkin:SkinToggle(Toggle)
     Label.Position = UDim2.new(0, 0, 0, 0)
 
     for _, child in ipairs(Holder:GetChildren()) do
-        if child:IsA("Frame") and child ~= Label then
+        if child:IsA("Frame") and child ~= Label and child.Name ~= "FluentSwitch" then
             child:Destroy()
         end
     end
@@ -227,7 +266,6 @@ function FluentSkin:SkinSlider(Slider)
     if not Slider or Slider.__FluentVisual then return end
     Slider.__FluentVisual = true
     local C = self.C
-
     local Holder = Slider.Holder
     if not Holder then return end
 
@@ -358,16 +396,10 @@ function FluentSkin:SkinButton(Button)
     stroke.Parent = Base
 
     Base.MouseEnter:Connect(function()
-        tween(Base, 0.15, {
-            BackgroundColor3 = C.Accent,
-            BackgroundTransparency = 0.5,
-        })
+        tween(Base, 0.15, { BackgroundColor3 = C.Accent, BackgroundTransparency = 0.5 })
     end)
     Base.MouseLeave:Connect(function()
-        tween(Base, 0.15, {
-            BackgroundColor3 = C.Card,
-            BackgroundTransparency = C.CardT,
-        })
+        tween(Base, 0.15, { BackgroundColor3 = C.Card, BackgroundTransparency = C.CardT })
     end)
 end
 
