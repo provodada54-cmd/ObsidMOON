@@ -246,7 +246,7 @@ function ModelGrid:Create(Groupbox, Idx, Info)
         lbl.Text = Info.Text
         lbl.TextSize = 14
         lbl.TextXAlignment = Enum.TextXAlignment.Left
-        lbl.Font = Library.Scheme.Font
+        lbl.FontFace = Library.Scheme.Font
         lbl.TextColor3 = Library.Scheme.FontColor
         lbl.Parent = Holder
         Library:AddToRegistry(lbl, { TextColor3 = "FontColor", FontFace = "Font" })
@@ -263,7 +263,7 @@ function ModelGrid:Create(Groupbox, Idx, Info)
         sb.PlaceholderText = Info.Placeholder
         sb.TextColor3 = Library.Scheme.FontColor
         sb.PlaceholderColor3 = Library.Scheme.FontColor:Lerp(Library.Scheme.BackgroundColor, 0.5)
-        sb.Font = Library.Scheme.Font
+        sb.FontFace = Library.Scheme.Font
         sb.TextSize = 12
         sb.ClearTextOnFocus = false
         sb.TextXAlignment = Enum.TextXAlignment.Left
@@ -354,7 +354,7 @@ function ModelGrid:Create(Groupbox, Idx, Info)
         nameLbl.Size = UDim2.new(1, -8, 0, 30)
         nameLbl.Position = UDim2.new(0, 4, 1, -34)
         nameLbl.Text = display
-        nameLbl.Font = Library.Scheme.Font
+        nameLbl.FontFace = Library.Scheme.Font
         nameLbl.TextSize = 10
         nameLbl.TextWrapped = true
         nameLbl.TextColor3 = Library.Scheme.FontColor
