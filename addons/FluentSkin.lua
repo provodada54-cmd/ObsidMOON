@@ -4,17 +4,22 @@ local FluentSkin = {
     Library = nil,
     C = {
         Bg          = Color3.fromRGB(20, 20, 20),
+        BgAlt       = Color3.fromRGB(26, 26, 26),
         Card        = Color3.fromRGB(120, 120, 120),
         CardT       = 0.87,
         CardHover   = 0.82,
         Border      = Color3.fromRGB(90, 90, 90),
         BorderT     = 0.6,
+        InBorder    = Color3.fromRGB(90, 90, 90),
         Text        = Color3.fromRGB(240, 240, 240),
+        SubText     = Color3.fromRGB(170, 170, 170),
         Accent      = Color3.fromRGB(96, 205, 255),
         Font        = Font.new("rbxasset://fonts/families/GothamSSm.json"),
         Corner      = 8,
         ElementH    = 42,
         PadX        = 12,
+        TabH        = 36,
+        TopH        = 42,
     },
 }
 
@@ -45,7 +50,27 @@ function FluentSkin:SetLibrary(Library)
     Library:UpdateColorsUsingRegistry()
 
     self:HookWindow(Library.Window)
+    task.defer(function() self:SkinWindow() end)
     return self
+end
+
+function FluentSkin:SkinWindow()
+    local L = self.Library
+    local W = L.Window
+    if not W or not W.MainFrame then return end
+    local C = self.C
+    local Main = W.MainFrame
+
+    Main.BackgroundColor3 = C.Bg
+    local mc = ensure(Main, "UICorner")
+    mc.CornerRadius = UDim.new(0, C.Corner + 2)
+
+    -- TopBar: search + title
+    for _, d in ipairs(Main:GetDescendants()) do
+        if d:IsA("TextLabel") then
+            d.FontFace = C.Font
+        end
+    end
 end
 
 function FluentSkin:HookWindow(Window)
@@ -84,14 +109,19 @@ function FluentSkin:HookTab(Tab)
     end
 end
 
+-- ============================================================
+-- Tab button (left sidebar)
+-- ============================================================
 function FluentSkin:SkinTabButton(Tab)
     local Btn = Tab.Button
     if not Btn then return end
     local C = self.C
-    Btn.Size = UDim2.new(1, 0, 0, 38)
+
+    Btn.Size = UDim2.new(1, -12, 0, C.TabH)
+    Btn.Position = UDim2.new(0, 6, 0, Btn.Position.Y.Offset)
 
     local corner = ensure(Btn, "UICorner")
-    corner.CornerRadius = UDim.new(0, C.Corner)
+    corner.CornerRadius = UDim.new(0, C.Corner - 2)
 
     for _, d in ipairs(Btn:GetDescendants()) do
         if d:IsA("TextLabel") then
@@ -99,9 +129,32 @@ function FluentSkin:SkinTabButton(Tab)
             d.TextSize = 14
             d.TextColor3 = C.Text
         end
+        if d:IsA("ImageLabel") then
+            d.Size = UDim2.fromOffset(16, 16)
+        end
+    end
+
+    -- side indicator
+    if not Btn:FindFirstChild("FluentIndicator") then
+        local bar = Instance.new("Frame")
+        bar.Name = "FluentIndicator"
+        bar.AnchorPoint = Vector2.new(0, 0.5)
+        bar.Position = UDim2.new(0, -3, 0.5, 0)
+        bar.Size = UDim2.fromOffset(3, 18)
+        bar.BackgroundColor3 = C.Accent
+        bar.BorderSizePixel = 0
+        bar.Visible = false
+        bar.ZIndex = 5
+        bar.Parent = Btn
+        local bc = Instance.new("UICorner")
+        bc.CornerRadius = UDim.new(1, 0)
+        bc.Parent = bar
     end
 end
 
+-- ============================================================
+-- Groupbox
+-- ============================================================
 function FluentSkin:SkinGroupbox(Groupbox)
     if not Groupbox or Groupbox.__FluentSkinned then return end
     Groupbox.__FluentSkinned = true
@@ -124,8 +177,8 @@ function FluentSkin:SkinGroupbox(Groupbox)
 
     if header then
         local pad = ensure(header, "UIPadding")
-        pad.PaddingTop = UDim.new(0, 10)
-        pad.PaddingBottom = UDim.new(0, 8)
+        pad.PaddingTop = UDim.new(0, 8)
+        pad.PaddingBottom = UDim.new(0, 6)
         pad.PaddingLeft = UDim.new(0, 4)
         pad.PaddingRight = UDim.new(0, 4)
 
@@ -168,6 +221,9 @@ function FluentSkin:SkinGroupbox(Groupbox)
     end
 end
 
+-- ============================================================
+-- Card helper
+-- ============================================================
 function FluentSkin:MakeCard(Holder, height)
     local C = self.C
     if not Holder or not Holder.Parent then return end
@@ -192,6 +248,9 @@ function FluentSkin:MakeCard(Holder, height)
     end)
 end
 
+-- ============================================================
+-- Toggle
+-- ============================================================
 function FluentSkin:SkinToggle(Toggle)
     if not Toggle or Toggle.__FluentVisual then return end
     Toggle.__FluentVisual = true
@@ -207,24 +266,27 @@ function FluentSkin:SkinToggle(Toggle)
         Label.TextSize = 14
         Label.TextColor3 = C.Text
         Label.TextXAlignment = Enum.TextXAlignment.Left
-        Label.Size = UDim2.new(1, -60, 1, 0)
-        Label.Position = UDim2.new(0, 12, 0, 0)
+        Label.Size = UDim2.new(1, -70, 1, 0)
+        Label.Position = UDim2.new(0, C.PadX, 0, 0)
     end
 
     for _, ch in ipairs(Holder:GetChildren()) do
-        if ch:IsA("Frame") and ch.AnchorPoint == Vector2.new(1, 0) then
-            ch.Size = UDim2.fromOffset(38, 20)
+        if ch:IsA("Frame") and ch.AnchorPoint.X == 1 then
+            ch.Size = UDim2.fromOffset(40, 22)
             ch.AnchorPoint = Vector2.new(1, 0.5)
-            ch.Position = UDim2.new(1, -12, 0.5, 0)
+            ch.Position = UDim2.new(1, -C.PadX, 0.5, 0)
             local sc = ch:FindFirstChildOfClass("UICorner")
             if sc then sc.CornerRadius = UDim.new(1, 0) end
             local ss = ch:FindFirstChildOfClass("UIStroke")
-            if ss then ss.Transparency = 0.6 end
+            if ss then ss.Transparency = 0.65 end
             break
         end
     end
 end
 
+-- ============================================================
+-- Slider
+-- ============================================================
 function FluentSkin:SkinSlider(Slider)
     if not Slider or Slider.__FluentVisual then return end
     Slider.__FluentVisual = true
@@ -232,7 +294,7 @@ function FluentSkin:SkinSlider(Slider)
     local Holder = Slider.Holder
     if not Holder then return end
 
-    self:MakeCard(Holder, 54)
+    self:MakeCard(Holder, 58)
 
     for _, d in ipairs(Holder:GetDescendants()) do
         if d:IsA("TextLabel") then
@@ -242,6 +304,9 @@ function FluentSkin:SkinSlider(Slider)
     end
 end
 
+-- ============================================================
+-- Dropdown
+-- ============================================================
 function FluentSkin:SkinDropdown(Dropdown)
     if not Dropdown or Dropdown.__FluentVisual then return end
     Dropdown.__FluentVisual = true
@@ -261,6 +326,9 @@ function FluentSkin:SkinDropdown(Dropdown)
     end
 end
 
+-- ============================================================
+-- Input
+-- ============================================================
 function FluentSkin:SkinInput(Input)
     if not Input or Input.__FluentVisual then return end
     Input.__FluentVisual = true
@@ -278,6 +346,9 @@ function FluentSkin:SkinInput(Input)
     end
 end
 
+-- ============================================================
+-- Button
+-- ============================================================
 function FluentSkin:SkinButton(Button)
     if not Button or Button.__FluentVisual then return end
     Button.__FluentVisual = true
@@ -308,6 +379,9 @@ function FluentSkin:SkinButton(Button)
     end)
 end
 
+-- ============================================================
+-- Label / Divider
+-- ============================================================
 function FluentSkin:SkinLabel(Label)
     if not Label or Label.__FluentVisual then return end
     Label.__FluentVisual = true
