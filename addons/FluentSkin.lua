@@ -7,13 +7,11 @@ local FluentSkin = {
         Bg      = Color3.fromRGB(20, 20, 20),
         Card    = Color3.fromRGB(120, 120, 120),
         CardT   = 0.87,
-        CardG   = 0.94,
         Border  = Color3.fromRGB(35, 35, 35),
         InBorder= Color3.fromRGB(90, 90, 90),
         Text    = Color3.fromRGB(240, 240, 240),
         SubText = Color3.fromRGB(170, 170, 170),
         Accent  = Color3.fromRGB(96, 205, 255),
-        AccentOff = Color3.fromRGB(120, 120, 120),
         Font    = Font.new("rbxasset://fonts/families/GothamSSm.json"),
         Corner  = 6,
         CardH   = 42,
@@ -22,6 +20,7 @@ local FluentSkin = {
 }
 
 local function tween(inst, time, props, style)
+    if not inst or not inst.Parent then return end
     TweenService:Create(inst, TweenInfo.new(time or 0.2, style or Enum.EasingStyle.Quint, Enum.EasingDirection.Out), props):Play()
 end
 
@@ -128,14 +127,13 @@ function FluentSkin:SkinGroupbox(Groupbox)
     end
 end
 
--- Groupbox card: soft transparent card, no visible top border, bigger title
 function FluentSkin:SkinGroupboxVisual(Groupbox)
     local C = self.C
     local holder = Groupbox.Holder
     if not holder then return end
 
     holder.BackgroundColor3 = C.Card
-    holder.BackgroundTransparency = C.CardG
+    holder.BackgroundTransparency = 0.94
 
     local stroke = holder:FindFirstChildOfClass("UIStroke")
     if stroke then
@@ -144,22 +142,9 @@ function FluentSkin:SkinGroupboxVisual(Groupbox)
         stroke.Thickness = 1
     end
 
-    -- find GroupboxTop by AutomaticSize.Y
-    local top
-    for _, ch in ipairs(holder:GetChildren()) do
-        if ch:IsA("Frame") and ch.AutomaticSize == Enum.AutomaticSize.Y then
-            top = ch
-            break
-        end
-    end
-
-    if top then
-        for _, ch in ipairs(top:GetDescendants()) do
-            if ch:IsA("TextLabel") then
-                ch.FontFace = C.Font
-                ch.TextColor3 = C.Text
-                ch.TextSize = 15
-            end
+    for _, ch in ipairs(holder:GetDescendants()) do
+        if ch:IsA("TextLabel") then
+            ch.FontFace = C.Font
         end
     end
 end
@@ -175,83 +160,49 @@ function FluentSkin:SkinToggle(Toggle)
     Holder.BackgroundColor3 = C.Card
     Holder.BackgroundTransparency = C.CardT
 
-    local corner = Instance.new("UICorner")
+    local corner = Holder:FindFirstChildOfClass("UICorner")
+    if not corner then
+        corner = Instance.new("UICorner")
+        corner.Parent = Holder
+    end
     corner.CornerRadius = UDim.new(0, C.Corner)
-    corner.Parent = Holder
 
-    local stroke = Instance.new("UIStroke")
+    local stroke = Holder:FindFirstChildOfClass("UIStroke")
+    if not stroke then
+        stroke = Instance.new("UIStroke")
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        stroke.Parent = Holder
+    end
     stroke.Color = C.Border
     stroke.Transparency = 0.5
-    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    stroke.Parent = Holder
 
-    local pad = Instance.new("UIPadding")
+    local pad = Holder:FindFirstChildOfClass("UIPadding")
+    if not pad then
+        pad = Instance.new("UIPadding")
+        pad.Parent = Holder
+    end
     pad.PaddingLeft = UDim.new(0, C.PadX)
     pad.PaddingRight = UDim.new(0, C.PadX)
-    pad.Parent = Holder
 
     Label.FontFace = C.Font
     Label.TextSize = 13
     Label.TextColor3 = C.Text
     Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.Size = UDim2.new(1, -50, 1, 0)
-    Label.Position = UDim2.new(0, 0, 0, 0)
 
-    for _, child in ipairs(Holder:GetChildren()) do
-        if child:IsA("Frame") and child ~= Label and child.Name ~= "FluentSwitch" then
-            child:Destroy()
+    for _, ch in ipairs(Holder:GetChildren()) do
+        if ch:IsA("Frame") then
+            for _, sub in ipairs(ch:GetDescendants()) do
+                if sub:IsA("TextLabel") then
+                    sub.FontFace = C.Font
+                    sub.TextColor3 = C.Text
+                end
+            end
+            for _, sub in ipairs(ch:GetChildren()) do
+                if sub:IsA("UIStroke") then
+                    sub.Transparency = 0.5
+                end
+            end
         end
-    end
-
-    local Switch = Instance.new("Frame")
-    Switch.Name = "FluentSwitch"
-    Switch.Size = UDim2.fromOffset(36, 18)
-    Switch.AnchorPoint = Vector2.new(1, 0.5)
-    Switch.Position = UDim2.new(1, 0, 0.5, 0)
-    Switch.BackgroundColor3 = Toggle.Value and C.Accent or C.AccentOff
-    Switch.BackgroundTransparency = Toggle.Value and 0 or 0.55
-    Switch.Parent = Holder
-
-    local sc = Instance.new("UICorner")
-    sc.CornerRadius = UDim.new(1, 0)
-    sc.Parent = Switch
-
-    local ss = Instance.new("UIStroke")
-    ss.Color = C.InBorder
-    ss.Transparency = 0.5
-    ss.Parent = Switch
-
-    local spad = Instance.new("UIPadding")
-    spad.PaddingTop = UDim.new(0, 2)
-    spad.PaddingBottom = UDim.new(0, 2)
-    spad.PaddingLeft = UDim.new(0, 2)
-    spad.PaddingRight = UDim.new(0, 2)
-    spad.Parent = Switch
-
-    local Ball = Instance.new("Frame")
-    Ball.Name = "FluentBall"
-    Ball.Size = UDim2.fromScale(1, 1)
-    Ball.SizeConstraint = Enum.SizeConstraint.RelativeYY
-    Ball.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    Ball.AnchorPoint = Vector2.new(Toggle.Value and 1 or 0, 0)
-    Ball.Position = UDim2.new(Toggle.Value and 1 or 0, 0, 0, 0)
-    Ball.Parent = Switch
-
-    local bc = Instance.new("UICorner")
-    bc.CornerRadius = UDim.new(1, 0)
-    bc.Parent = Ball
-
-    local origSetValue = Toggle.SetValue
-    Toggle.SetValue = function(self2, value)
-        origSetValue(self2, value)
-        tween(Ball, 0.25, {
-            Position = UDim2.new(value and 1 or 0, 0, 0, 0),
-            AnchorPoint = Vector2.new(value and 1 or 0, 0),
-        })
-        tween(Switch, 0.25, {
-            BackgroundColor3 = value and C.Accent or C.AccentOff,
-            BackgroundTransparency = value and 0 or 0.55,
-        })
     end
 
     Holder.MouseEnter:Connect(function()
@@ -273,15 +224,29 @@ function FluentSkin:SkinSlider(Slider)
     Holder.BackgroundColor3 = C.Card
     Holder.BackgroundTransparency = C.CardT
 
-    local corner = Instance.new("UICorner")
+    local corner = Holder:FindFirstChildOfClass("UICorner")
+    if not corner then
+        corner = Instance.new("UICorner")
+        corner.Parent = Holder
+    end
     corner.CornerRadius = UDim.new(0, C.Corner)
-    corner.Parent = Holder
 
-    local stroke = Instance.new("UIStroke")
+    local stroke = Holder:FindFirstChildOfClass("UIStroke")
+    if not stroke then
+        stroke = Instance.new("UIStroke")
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        stroke.Parent = Holder
+    end
     stroke.Color = C.Border
     stroke.Transparency = 0.5
-    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    stroke.Parent = Holder
+
+    local pad = Holder:FindFirstChildOfClass("UIPadding")
+    if not pad then
+        pad = Instance.new("UIPadding")
+        pad.Parent = Holder
+    end
+    pad.PaddingLeft = UDim.new(0, C.PadX)
+    pad.PaddingRight = UDim.new(0, C.PadX)
 
     for _, ch in ipairs(Holder:GetDescendants()) do
         if ch:IsA("TextLabel") then
@@ -310,15 +275,29 @@ function FluentSkin:SkinDropdown(Dropdown)
     Holder.BackgroundColor3 = C.Card
     Holder.BackgroundTransparency = C.CardT
 
-    local corner = Instance.new("UICorner")
+    local corner = Holder:FindFirstChildOfClass("UICorner")
+    if not corner then
+        corner = Instance.new("UICorner")
+        corner.Parent = Holder
+    end
     corner.CornerRadius = UDim.new(0, C.Corner)
-    corner.Parent = Holder
 
-    local stroke = Instance.new("UIStroke")
+    local stroke = Holder:FindFirstChildOfClass("UIStroke")
+    if not stroke then
+        stroke = Instance.new("UIStroke")
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        stroke.Parent = Holder
+    end
     stroke.Color = C.Border
     stroke.Transparency = 0.5
-    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    stroke.Parent = Holder
+
+    local pad = Holder:FindFirstChildOfClass("UIPadding")
+    if not pad then
+        pad = Instance.new("UIPadding")
+        pad.Parent = Holder
+    end
+    pad.PaddingLeft = UDim.new(0, C.PadX)
+    pad.PaddingRight = UDim.new(0, C.PadX)
 
     for _, ch in ipairs(Holder:GetDescendants()) do
         if ch:IsA("TextLabel") then
@@ -346,15 +325,29 @@ function FluentSkin:SkinInput(Input)
     Holder.BackgroundColor3 = C.Card
     Holder.BackgroundTransparency = C.CardT
 
-    local corner = Instance.new("UICorner")
+    local corner = Holder:FindFirstChildOfClass("UICorner")
+    if not corner then
+        corner = Instance.new("UICorner")
+        corner.Parent = Holder
+    end
     corner.CornerRadius = UDim.new(0, C.Corner)
-    corner.Parent = Holder
 
-    local stroke = Instance.new("UIStroke")
+    local stroke = Holder:FindFirstChildOfClass("UIStroke")
+    if not stroke then
+        stroke = Instance.new("UIStroke")
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        stroke.Parent = Holder
+    end
     stroke.Color = C.Border
     stroke.Transparency = 0.5
-    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    stroke.Parent = Holder
+
+    local pad = Holder:FindFirstChildOfClass("UIPadding")
+    if not pad then
+        pad = Instance.new("UIPadding")
+        pad.Parent = Holder
+    end
+    pad.PaddingLeft = UDim.new(0, C.PadX)
+    pad.PaddingRight = UDim.new(0, C.PadX)
 
     for _, ch in ipairs(Holder:GetDescendants()) do
         if ch:IsA("TextLabel") or ch:IsA("TextBox") then
@@ -385,22 +378,21 @@ function FluentSkin:SkinButton(Button)
     Base.TextSize = 13
     Base.FontFace = C.Font
 
-    local corner = Instance.new("UICorner")
+    local corner = Base:FindFirstChildOfClass("UICorner")
+    if not corner then
+        corner = Instance.new("UICorner")
+        corner.Parent = Base
+    end
     corner.CornerRadius = UDim.new(0, C.Corner)
-    corner.Parent = Base
 
-    local stroke = Instance.new("UIStroke")
+    local stroke = Base:FindFirstChildOfClass("UIStroke")
+    if not stroke then
+        stroke = Instance.new("UIStroke")
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        stroke.Parent = Base
+    end
     stroke.Color = C.Border
     stroke.Transparency = 0.5
-    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    stroke.Parent = Base
-
-    Base.MouseEnter:Connect(function()
-        tween(Base, 0.15, { BackgroundColor3 = C.Accent, BackgroundTransparency = 0.5 })
-    end)
-    Base.MouseLeave:Connect(function()
-        tween(Base, 0.15, { BackgroundColor3 = C.Card, BackgroundTransparency = C.CardT })
-    end)
 end
 
 getgenv().ObsidianFluentSkin = FluentSkin
