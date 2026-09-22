@@ -11,6 +11,14 @@ local FluentSkin = {
 }
 
 function FluentSkin:SetLibrary(Library)
+    self.Library = Library
+    Library.Scheme.BackgroundColor = self.C.Bg
+    Library.Scheme.MainColor       = self.C.Card
+    Library.Scheme.AccentColor     = self.C.Accent
+    Library.Scheme.OutlineColor    = self.C.Border
+    Library.Scheme.FontColor       = self.C.Text
+    Library.CornerRadius           = self.C.Corner
+    Library:UpdateColorsUsingRegistry()
     return self
 end
 
