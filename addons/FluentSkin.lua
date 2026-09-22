@@ -130,4 +130,4 @@ function FluentSkin:SkinGroupbox(Groupbox)
 end
 
 getgenv().ObsidianFluentSkin = FluentSkin
-return FluentSki
+return FluentSkin
