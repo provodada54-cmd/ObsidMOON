@@ -64,7 +64,12 @@ function ModelGrid:RegisterSaveParser()
 
     SM.ElementParser["ModelGrid"] = {
         Save = function(Index, Element)
-            return { value = Element.Value, hasValue = Element.Value ~= nil }
+            return {
+                type = "ModelGrid",
+                idx = Index,
+                value = Element.Value,
+                hasValue = Element.Value ~= nil,
+            }
         end,
         Load = function(Index, Data)
             local Element = ModelGrid.Library and ModelGrid.Library.Options[Index]
