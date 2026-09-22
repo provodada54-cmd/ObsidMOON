@@ -63,10 +63,11 @@ function ModelGrid:RegisterSaveParser()
     if not SM or not SM.ElementParser then return end
 
     SM.ElementParser["ModelGrid"] = {
-        Save = function(_Index, Element)
+        Save = function(Index, Element)
             return { value = Element.Value, hasValue = Element.Value ~= nil }
         end,
-        Load = function(Element, Data)
+        Load = function(Index, Data)
+            local Element = ModelGrid.Library and ModelGrid.Library.Options[Index]
             if not Element then return end
             local v = Data.hasValue and Data.value or nil
             if Element.Value == v then
@@ -325,12 +326,7 @@ function ModelGrid:Create(Groupbox, Idx, Info)
         local cellW = math.floor((scrollW - totalPad) / Columns)
         if cellW < 60 then cellW = 60 end
 
-        local cellH = CellHeight
-        if not NoPreview then
-            cellH = Info.CellHeight or 130 + 40
-        end
-
-        Grid.CellSize = UDim2.fromOffset(cellW, cellH)
+        Grid.CellSize = UDim2.fromOffset(cellW, CellHeight)
     end
 
     local function makeCell(itemName, display)
@@ -608,9 +604,6 @@ function ModelGrid:Create(Groupbox, Idx, Info)
     end
 
     table.insert(Element.Connections, Scroll:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
-        Element:UpdateVisibleViewports()
-    end))
-    table.insert(Element.Connections, Scroll:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
         Element:UpdateVisibleViewports()
     end))
 
