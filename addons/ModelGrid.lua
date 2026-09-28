@@ -31,6 +31,8 @@ local ModelGrid = {
         Columns       = 1,
         NoPreview     = false,
         ModelProvider = nil,
+        Render3D      = nil,
+        ImageProvider = nil,
         FormatDisplay = nil,
         Searchable    = true,
         AllowNull     = false,
@@ -236,6 +238,8 @@ function ModelGrid:Create(Groupbox, Idx, Info)
         NullText      = Info.NullText,
 
         ModelProvider = Info.ModelProvider,
+        Render3D      = Info.Render3D,
+        ImageProvider = Info.ImageProvider,
         FormatDisplay = Info.FormatDisplay,
 
         Callback = Info.Callback,
@@ -363,7 +367,37 @@ function ModelGrid:Create(Groupbox, Idx, Info)
         local vp
         local nameLbl
 
-        if NoPreview then
+        if Info.ImageProvider and not NoPreview then
+            local img = Instance.new("ImageLabel")
+            img.Name = "VP"
+            img.BackgroundColor3 = Library.Scheme.BackgroundColor
+            img.BackgroundTransparency = 0.3
+            img.BorderSizePixel = 0
+            img.Size = UDim2.new(1, -8, 1, -34)
+            img.Position = UDim2.new(0, 4, 0, 4)
+            img.ScaleType = Enum.ScaleType.Fit
+            img.Parent = Frame
+            Library:AddToRegistry(img, { BackgroundColor3 = "BackgroundColor" })
+
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(0, 3)
+            corner.Parent = img
+
+            nameLbl = Instance.new("TextLabel")
+            nameLbl.Name = "NameLbl"
+            nameLbl.BackgroundTransparency = 1
+            nameLbl.Size = UDim2.new(1, -8, 0, 30)
+            nameLbl.Position = UDim2.new(0, 4, 1, -34)
+            nameLbl.Text = display
+            nameLbl.FontFace = Library.Scheme.Font
+            nameLbl.TextSize = 10
+            nameLbl.TextWrapped = true
+            nameLbl.TextColor3 = Library.Scheme.FontColor
+            nameLbl.Parent = Frame
+            Library:AddToRegistry(nameLbl, { TextColor3 = "FontColor", FontFace = "Font" })
+
+            Cell.Image = img
+        elseif NoPreview then
             nameLbl = Instance.new("TextLabel")
             nameLbl.Name = "NameLbl"
             nameLbl.BackgroundTransparency = 1
@@ -428,6 +462,28 @@ function ModelGrid:Create(Groupbox, Idx, Info)
     local function loadCellViewport(cell)
         if cell.Loaded or cell.Destroyed then return end
         if cell.ItemName == nil then return end
+
+        if Element.ImageProvider then
+            cell.Loaded = true
+            if cell.Image then
+                local ok, imgId = pcall(Element.ImageProvider, cell.ItemName)
+                if ok and type(imgId) == "string" and imgId ~= "" then
+                    cell.Image.Image = imgId
+                    cell.Image.Visible = true
+                else
+                    cell.Image.Visible = false
+                end
+            end
+            return
+        end
+
+        if Element.Render3D then
+            if not cell.Viewport then cell.Loaded = true; return end
+            cell.Loaded = true
+            pcall(Element.Render3D, cell.Viewport, cell.ItemName)
+            return
+        end
+
         if not Element.ModelProvider then return end
         if not cell.Viewport then cell.Loaded = true; return end
 
