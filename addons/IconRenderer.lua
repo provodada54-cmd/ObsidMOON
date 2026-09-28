@@ -1,5 +1,4 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService        = game:GetService("RunService")
 
 local Assets       = ReplicatedStorage:WaitForChild("Assets")
 local SwordsFolder = Assets:WaitForChild("Swords")
@@ -7,15 +6,8 @@ local ItemsFolder  = Assets:WaitForChild("Items")
 
 local DataBins    = ReplicatedStorage:WaitForChild("DataBins")
 local ItemData    = require(DataBins:WaitForChild("ItemData"))
-local EnchantData = require(DataBins:WaitForChild("EnchantData"))
 
 local IconRenderer = {}
-
-local CAMERA = {
-    Sword = { FOV = 70, Angle = 0,                  Distance = 8 },
-    Item  = { FOV = 30, Angle = 0.4487989505128276, Distance = 8 },
-    Pose  = { FOV = 30, Angle = 0.4487989505128276, Distance = 8 },
-}
 
 local function prepareEffects(model)
     for _, d in ipairs(model:GetDescendants()) do
@@ -48,14 +40,26 @@ local function getOrCreateCamera(viewport)
     return cam
 end
 
-local function applyCamera(cam, model, preset)
-    local cfg = CAMERA[preset] or CAMERA.Item
-    cam.FieldOfView = cfg.FOV
-    local pivot = model:GetPivot()
-    cam.CFrame = pivot * CFrame.Angles(0, cfg.Angle, 0) * CFrame.new(0, 0, cfg.Distance)
+local function fitCamera(cam, model, fov, padFactor, yawDeg, pitchDeg)
+    fov = fov or 70
+    padFactor = padFactor or 0.85
+    yawDeg = yawDeg or 35
+    pitchDeg = pitchDeg or -20
+
+    local cf, size = model:GetBoundingBox()
+    local maxDim = math.max(size.X, size.Y, size.Z)
+    if maxDim < 0.01 then maxDim = 1 end
+
+    local halfAngle = math.rad(fov * 0.5)
+    local dist = (maxDim * 0.5) / (math.tan(halfAngle) * padFactor)
+    if dist < 1 then dist = 1 end
+
+    local dir = CFrame.Angles(math.rad(pitchDeg), math.rad(yawDeg), 0) * Vector3.new(0, 0, dist)
+    cam.FieldOfView = fov
+    cam.CFrame = CFrame.lookAt(cf.Position + dir, cf.Position)
 end
 
-function IconRenderer.Render3D(viewport, source, preset)
+function IconRenderer.Render3D(viewport, source, opts)
     if not viewport or not source then return nil end
     clearViewport(viewport)
 
@@ -64,7 +68,9 @@ function IconRenderer.Render3D(viewport, source, preset)
     prepareEffects(model)
 
     local cam = getOrCreateCamera(viewport)
-    applyCamera(cam, model, preset)
+    opts = opts or {}
+    fitCamera(cam, model, opts.fov or 70, opts.pad or 0.85, opts.yaw or 35, opts.pitch or -20)
+
     return model, cam
 end
 
@@ -75,7 +81,12 @@ function IconRenderer.RenderSword(viewport, swordName, opts)
     local template = SwordsFolder:FindFirstChild(swordName)
     if not template then return nil end
 
-    local model, cam = IconRenderer.Render3D(viewport, template, "Sword")
+    local model, cam = IconRenderer.Render3D(viewport, template, {
+        fov = 70,
+        pad = 0.85,
+        yaw = 35,
+        pitch = -20,
+    })
     if not model then return nil end
 
     if opts.shiny then
@@ -108,7 +119,12 @@ function IconRenderer.RenderAura(viewport, auraName)
     local template = ItemsFolder:FindFirstChild(auraName)
     if not template then return nil end
     if not (template:IsA("Model") or template:IsA("BasePart")) then return nil end
-    return IconRenderer.Render3D(viewport, template, "Item")
+    return IconRenderer.Render3D(viewport, template, {
+        fov = 45,
+        pad = 0.85,
+        yaw = 35,
+        pitch = -20,
+    })
 end
 
 local function rigTemplate()
@@ -181,11 +197,15 @@ function IconRenderer.RenderPose(viewport, poseName)
     end
 
     local cam = getOrCreateCamera(viewport)
-    applyCamera(cam, clone, "Pose")
+    fitCamera(cam, clone, 45, 0.75, 25, -10)
     return clone, cam
 end
 
 function IconRenderer.GetEnchantImage(enchName)
+    local ok, EnchantData = pcall(function()
+        return require(ReplicatedStorage.DataBins:WaitForChild("EnchantData"))
+    end)
+    if not ok or type(EnchantData) ~= "table" then return nil end
     local data = EnchantData[enchName]
     if type(data) == "table" then
         return data.ImageId or data.Icon or data.IconImage
@@ -197,18 +217,6 @@ function IconRenderer.GetItemImage(itemName)
     local data = ItemData[itemName]
     if type(data) == "table" then
         return data.ImageId or data.Icon or data.IconImage
-    end
-    return nil
-end
-
-function IconRenderer.GetPoseImage(poseName)
-    local data = ItemData[poseName]
-    if type(data) == "table" then
-        if data.ImageId then return data.ImageId end
-        local m = data.Meta
-        if type(m) == "table" then
-            return m.ImageId or m.Icon or m.IconImage
-        end
     end
     return nil
 end
