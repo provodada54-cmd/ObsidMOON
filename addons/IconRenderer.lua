@@ -1,24 +1,25 @@
-local ReplicatedFirst = game:GetService("ReplicatedFirst")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Assets = ReplicatedStorage:WaitForChild("Assets")
+local Assets       = ReplicatedStorage:WaitForChild("Assets")
+local SwordsFolder = Assets:WaitForChild("Swords")
+local ItemsFolder  = Assets:WaitForChild("Items")
+
 local DataBins = ReplicatedStorage:WaitForChild("DataBins")
 local ItemData = require(DataBins:WaitForChild("ItemData"))
 
 local IconRenderer = {}
 
-local SwordTradable, ItemTradable
-
-local function ensureTradables()
-	if SwordTradable and ItemTradable then return end
-	local ok, TradablesUI = pcall(function()
-		return require(ReplicatedFirst.Core.TradablesUI)
-	end)
-	if not ok or type(TradablesUI) ~= "table" then return end
-	pcall(function()
-		SwordTradable = TradablesUI.FromRewardType("Sword") or SwordTradable
-		ItemTradable  = TradablesUI.FromRewardType("Item") or ItemTradable
-	end)
+local function prepareEffects(model)
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+			d.CanCollide = false
+		elseif d:IsA("ParticleEmitter") or d:IsA("Beam") or d:IsA("Trail")
+			or d:IsA("Fire") or d:IsA("Smoke") or d:IsA("Sparkles")
+			or d:IsA("PointLight") or d:IsA("SpotLight") or d:IsA("SurfaceLight") then
+			d.Enabled = true
+		end
+	end
 end
 
 local function clearViewport(viewport)
@@ -29,19 +30,104 @@ local function clearViewport(viewport)
 	end
 end
 
-function IconRenderer.RenderSword(viewport, swordName, opts)
-	if not viewport or type(swordName) ~= "string" or swordName == "" then return nil end
-	ensureTradables()
-	if not SwordTradable then return nil end
+local function getOrCreateCamera(viewport)
+	local cam = viewport:FindFirstChildOfClass("Camera")
+	if not cam then
+		cam = Instance.new("Camera")
+		cam.Parent = viewport
+	end
+	viewport.CurrentCamera = cam
+	return cam
+end
 
+local function computeVisibleBounds(model)
+	local minV, maxV = nil, nil
+	local function visit(inst)
+		if inst:IsA("BasePart") and inst.Transparency < 0.95 then
+			local cf = inst.CFrame
+			local hs = inst.Size * 0.5
+			local corners = {
+				cf * CFrame.new( hs.X,  hs.Y,  hs.Z).Position,
+				cf * CFrame.new(-hs.X,  hs.Y,  hs.Z).Position,
+				cf * CFrame.new( hs.X, -hs.Y,  hs.Z).Position,
+				cf * CFrame.new(-hs.X, -hs.Y,  hs.Z).Position,
+				cf * CFrame.new( hs.X,  hs.Y, -hs.Z).Position,
+				cf * CFrame.new(-hs.X,  hs.Y, -hs.Z).Position,
+				cf * CFrame.new( hs.X, -hs.Y, -hs.Z).Position,
+				cf * CFrame.new(-hs.X, -hs.Y, -hs.Z).Position,
+			}
+			for _, p in ipairs(corners) do
+				if not minV then
+					minV, maxV = p, p
+				else
+					minV = Vector3.new(math.min(minV.X, p.X), math.min(minV.Y, p.Y), math.min(minV.Z, p.Z))
+					maxV = Vector3.new(math.max(maxV.X, p.X), math.max(maxV.Y, p.Y), math.max(maxV.Z, p.Z))
+				end
+			end
+		end
+		for _, child in ipairs(inst:GetChildren()) do visit(child) end
+	end
+	visit(model)
+	return minV, maxV
+end
+
+local function frameModel(viewport, model, opts)
+	opts = opts or {}
+	local fov   = opts.fov   or 70
+	local pad   = opts.pad   or 0.75
+	local yaw   = opts.yaw   or 35
+	local pitch = opts.pitch or -20
+
+	local cam = getOrCreateCamera(viewport)
+	cam.FieldOfView = fov
+
+	local minV, maxV = computeVisibleBounds(model)
+	local center, size
+	if minV and maxV then
+		center = (minV + maxV) * 0.5
+		size = maxV - minV
+	else
+		local cf, sz = model:GetBoundingBox()
+		center = cf.Position
+		size = sz
+	end
+
+	local maxDim = math.max(size.X, size.Y, size.Z)
+	if maxDim < 0.1 then maxDim = 1 end
+
+	local halfAngle = math.rad(fov * 0.5)
+	local dist = (maxDim * 0.5) / (math.tan(halfAngle) * pad)
+	if dist < 1 then dist = 1 end
+
+	local dir = CFrame.Angles(math.rad(pitch), math.rad(yaw), 0) * Vector3.new(0, 0, dist)
+	cam.CFrame = CFrame.lookAt(center + dir, center)
+end
+
+function IconRenderer.Render3D(viewport, source, opts)
+	if not viewport or not source then return nil end
 	clearViewport(viewport)
 
-	local ok, model, cam = pcall(function()
-		return SwordTradable:SetupViewport(swordName, viewport, true)
-	end)
-	if not ok or not model then return nil end
+	local model = source:Clone()
+	model.Parent = viewport
+	prepareEffects(model)
 
-	if opts and opts.shiny then
+	frameModel(viewport, model, opts)
+	return model, viewport.CurrentCamera
+end
+
+function IconRenderer.RenderSword(viewport, swordName, opts)
+	opts = opts or {}
+	if type(swordName) ~= "string" or swordName == "" then return nil end
+
+	local template = SwordsFolder:FindFirstChild(swordName)
+	if not template then return nil end
+
+	local model, cam = IconRenderer.Render3D(viewport, template, {
+		fov = 70, pad = 0.72, yaw = 35, pitch = -20,
+	})
+	if not model then return nil end
+
+	if opts.shiny then
 		for _, d in ipairs(model:GetDescendants()) do
 			if d:IsA("BasePart") then
 				d.Material = Enum.Material.Neon
@@ -50,22 +136,30 @@ function IconRenderer.RenderSword(viewport, swordName, opts)
 		end
 	end
 
+	if opts.ascended or opts.vfxColor then
+		local Packages = ReplicatedStorage:FindFirstChild("Packages")
+		local sv = Packages and Packages:FindFirstChild("SwordVisuals")
+		if sv then
+			local ok, mod = pcall(require, sv)
+			if ok and mod and mod.Apply then
+				pcall(function()
+					mod.Apply(model, { Ascension = true, VFXColor = opts.vfxColor })
+				end)
+			end
+		end
+	end
+
 	return model, cam
 end
 
 function IconRenderer.RenderAura(viewport, auraName)
-	if not viewport or type(auraName) ~= "string" or auraName == "" then return nil end
-	ensureTradables()
-	if not ItemTradable then return nil end
-
-	clearViewport(viewport)
-
-	local ok, model, cam = pcall(function()
-		return ItemTradable:SetupViewport(auraName, viewport, true)
-	end)
-	if not ok or not model then return nil end
-
-	return model, cam
+	if type(auraName) ~= "string" or auraName == "" then return nil end
+	local template = ItemsFolder:FindFirstChild(auraName)
+	if not template then return nil end
+	if not (template:IsA("Model") or template:IsA("BasePart")) then return nil end
+	return IconRenderer.Render3D(viewport, template, {
+		fov = 50, pad = 0.78, yaw = 35, pitch = -20,
+	})
 end
 
 local function rigTemplate()
@@ -135,22 +229,8 @@ function IconRenderer.RenderPose(viewport, poseName)
 		end
 	end
 
-	local cam = viewport:FindFirstChildOfClass("Camera")
-	if not cam then
-		cam = Instance.new("Camera")
-		cam.Parent = viewport
-	end
-	viewport.CurrentCamera = cam
-	cam.FieldOfView = 45
-
-	local cf, size = clone:GetBoundingBox()
-	local maxDim = math.max(size.X, size.Y, size.Z)
-	if maxDim < 0.01 then maxDim = 1 end
-	local dist = (maxDim * 0.5) / (math.tan(math.rad(45) * 0.5) * 0.75)
-	local dir = CFrame.Angles(math.rad(-10), math.rad(25), 0) * Vector3.new(0, 0, dist)
-	cam.CFrame = CFrame.lookAt(cf.Position + dir, cf.Position)
-
-	return clone, cam
+	frameModel(viewport, clone, { fov = 50, pad = 0.8, yaw = 25, pitch = -10 })
+	return clone, viewport.CurrentCamera
 end
 
 return IconRenderer
