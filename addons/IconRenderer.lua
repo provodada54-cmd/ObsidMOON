@@ -9,6 +9,8 @@ local ItemData = require(DataBins:WaitForChild("ItemData"))
 
 local IconRenderer = {}
 
+local animCache = {}
+
 local function prepareEffects(model)
 	for _, d in ipairs(model:GetDescendants()) do
 		if d:IsA("BasePart") then
@@ -40,67 +42,31 @@ local function getOrCreateCamera(viewport)
 	return cam
 end
 
-local function computeVisibleBounds(model)
-	local minV, maxV = nil, nil
-	local function visit(inst)
-		if inst:IsA("BasePart") and inst.Transparency < 0.95 then
-			local cf = inst.CFrame
-			local hs = inst.Size * 0.5
-			local corners = {
-				cf * CFrame.new( hs.X,  hs.Y,  hs.Z).Position,
-				cf * CFrame.new(-hs.X,  hs.Y,  hs.Z).Position,
-				cf * CFrame.new( hs.X, -hs.Y,  hs.Z).Position,
-				cf * CFrame.new(-hs.X, -hs.Y,  hs.Z).Position,
-				cf * CFrame.new( hs.X,  hs.Y, -hs.Z).Position,
-				cf * CFrame.new(-hs.X,  hs.Y, -hs.Z).Position,
-				cf * CFrame.new( hs.X, -hs.Y, -hs.Z).Position,
-				cf * CFrame.new(-hs.X, -hs.Y, -hs.Z).Position,
-			}
-			for _, p in ipairs(corners) do
-				if not minV then
-					minV, maxV = p, p
-				else
-					minV = Vector3.new(math.min(minV.X, p.X), math.min(minV.Y, p.Y), math.min(minV.Z, p.Z))
-					maxV = Vector3.new(math.max(maxV.X, p.X), math.max(maxV.Y, p.Y), math.max(maxV.Z, p.Z))
-				end
-			end
-		end
-		for _, child in ipairs(inst:GetChildren()) do visit(child) end
-	end
-	visit(model)
-	return minV, maxV
+local function findPrimaryPart(model)
+	if model:IsA("BasePart") then return model end
+	if model.PrimaryPart then return model.PrimaryPart end
+	local sw = model:FindFirstChild("Sword")
+	if sw and sw:IsA("BasePart") then return sw end
+	local dual = model:FindFirstChild("Dual")
+	if dual and dual:IsA("BasePart") then return dual end
+	return model:FindFirstChildWhichIsA("BasePart", true)
 end
 
-local function frameModel(viewport, model, opts)
-	opts = opts or {}
-	local fov   = opts.fov   or 70
-	local pad   = opts.pad   or 0.75
-	local yaw   = opts.yaw   or 35
-	local pitch = opts.pitch or -20
-
-	local cam = getOrCreateCamera(viewport)
+local function frameFromPart(cam, part, fov, distMul)
+	fov = fov or 70
+	distMul = distMul or 1.6
 	cam.FieldOfView = fov
 
-	local minV, maxV = computeVisibleBounds(model)
-	local center, size
-	if minV and maxV then
-		center = (minV + maxV) * 0.5
-		size = maxV - minV
-	else
-		local cf, sz = model:GetBoundingBox()
-		center = cf.Position
-		size = sz
-	end
+	local maxDim = math.max(part.Size.X, part.Size.Y, part.Size.Z)
+	if maxDim < 0.5 then maxDim = 1 end
 
-	local maxDim = math.max(size.X, size.Y, size.Z)
-	if maxDim < 0.1 then maxDim = 1 end
+	local center = part.Position
+	local dist = maxDim * distMul
 
-	local halfAngle = math.rad(fov * 0.5)
-	local dist = (maxDim * 0.5) / (math.tan(halfAngle) * pad)
-	if dist < 1 then dist = 1 end
-
-	local dir = CFrame.Angles(math.rad(pitch), math.rad(yaw), 0) * Vector3.new(0, 0, dist)
-	cam.CFrame = CFrame.lookAt(center + dir, center)
+	cam.CFrame = CFrame.new(
+		center + Vector3.new(dist * 0.45, dist * 0.35, dist * 0.95),
+		center
+	)
 end
 
 function IconRenderer.Render3D(viewport, source, opts)
@@ -108,11 +74,17 @@ function IconRenderer.Render3D(viewport, source, opts)
 	clearViewport(viewport)
 
 	local model = source:Clone()
+	if not model then return nil end
 	model.Parent = viewport
 	prepareEffects(model)
 
-	frameModel(viewport, model, opts)
-	return model, viewport.CurrentCamera
+	local cam = getOrCreateCamera(viewport)
+	local primary = findPrimaryPart(model)
+	if not primary then return model, cam end
+
+	opts = opts or {}
+	frameFromPart(cam, primary, opts.fov or 70, opts.distMul or 1.6)
+	return model, cam
 end
 
 function IconRenderer.RenderSword(viewport, swordName, opts)
@@ -122,9 +94,7 @@ function IconRenderer.RenderSword(viewport, swordName, opts)
 	local template = SwordsFolder:FindFirstChild(swordName)
 	if not template then return nil end
 
-	local model, cam = IconRenderer.Render3D(viewport, template, {
-		fov = 70, pad = 0.72, yaw = 35, pitch = -20,
-	})
+	local model, cam = IconRenderer.Render3D(viewport, template, { fov = 70, distMul = 1.55 })
 	if not model then return nil end
 
 	if opts.shiny then
@@ -157,9 +127,19 @@ function IconRenderer.RenderAura(viewport, auraName)
 	local template = ItemsFolder:FindFirstChild(auraName)
 	if not template then return nil end
 	if not (template:IsA("Model") or template:IsA("BasePart")) then return nil end
-	return IconRenderer.Render3D(viewport, template, {
-		fov = 50, pad = 0.78, yaw = 35, pitch = -20,
-	})
+
+	local model, cam = IconRenderer.Render3D(viewport, template, { fov = 50, distMul = 1.7 })
+	if not model then return nil end
+
+	local hum = model:FindFirstChildOfClass("Humanoid") or model:FindFirstChildWhichIsA("Humanoid", true)
+	if hum then
+		local hrp = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("UpperTorso") or model:FindFirstChildWhichIsA("BasePart", true)
+		if hrp and cam then
+			frameFromPart(cam, hrp, 50, 2.4)
+		end
+	end
+
+	return model, cam
 end
 
 local function rigTemplate()
@@ -169,15 +149,26 @@ local function rigTemplate()
 end
 
 local function getAnimation(animId)
+	if animCache[animId] ~= nil then
+		return animCache[animId] or nil
+	end
 	local ok, objs = pcall(game.GetObjects, game, "rbxassetid://" .. tostring(animId))
-	if not ok or not objs or not objs[1] then return nil end
+	if not ok or not objs or not objs[1] then
+		animCache[animId] = false
+		return nil
+	end
 	local obj = objs[1]
-	if obj:IsA("Animation") then return obj end
+	if obj:IsA("Animation") then
+		animCache[animId] = obj
+		return obj
+	end
 	if obj:IsA("KeyframeSequence") then
 		local a = Instance.new("Animation")
 		a.AnimationId = "rbxassetid://" .. tostring(animId)
+		animCache[animId] = a
 		return a
 	end
+	animCache[animId] = false
 	return nil
 end
 
@@ -195,6 +186,7 @@ function IconRenderer.RenderPose(viewport, poseName)
 	clearViewport(viewport)
 
 	local clone = rig:Clone()
+	if not clone then return nil end
 	clone.Parent = viewport
 
 	for _, d in ipairs(clone:GetDescendants()) do
@@ -222,15 +214,50 @@ function IconRenderer.RenderPose(viewport, poseName)
 			pcall(function()
 				track.Priority = Enum.AnimationPriority.Action4
 				track.Looped = true
-				track:Play(0)
-				track.Playing = false
-				animator:StepAnimations(0.15)
+				track:Play(0.01)
+				track.TimePosition = 0.25
+				track:AdjustSpeed(0)
+				animator:StepAnimations(0.001)
 			end)
 		end
 	end
 
-	frameModel(viewport, clone, { fov = 50, pad = 0.8, yaw = 25, pitch = -10 })
-	return clone, viewport.CurrentCamera
+	local cam = getOrCreateCamera(viewport)
+	cam.FieldOfView = 45
+
+	local hrp = clone:FindFirstChild("HumanoidRootPart") or clone:FindFirstChild("UpperTorso") or clone:FindFirstChildWhichIsA("BasePart", true)
+	if hrp then
+		local maxDim = math.max(hrp.Size.X, hrp.Size.Y, hrp.Size.Z)
+		if maxDim < 0.5 then maxDim = 1 end
+		local dist = 6.5
+		local center = hrp.Position
+		cam.CFrame = CFrame.new(
+			center + Vector3.new(dist * 0.35, dist * 0.15, dist),
+			center
+		)
+	end
+
+	return clone, cam
+end
+
+function IconRenderer.GetEnchantImage(enchName)
+	local ok, EnchantData = pcall(function()
+		return require(ReplicatedStorage.DataBins:WaitForChild("EnchantData"))
+	end)
+	if not ok or type(EnchantData) ~= "table" then return nil end
+	local data = EnchantData[enchName]
+	if type(data) == "table" then
+		return data.ImageId or data.Icon or data.IconImage
+	end
+	return nil
+end
+
+function IconRenderer.GetItemImage(itemName)
+	local data = ItemData[itemName]
+	if type(data) == "table" then
+		return data.ImageId or data.Icon or data.IconImage
+	end
+	return nil
 end
 
 return IconRenderer
